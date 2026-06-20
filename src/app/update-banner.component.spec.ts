@@ -25,7 +25,7 @@ describe('UpdateBannerComponent', () => {
 
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.update-banner')).toBeTruthy();
+    expect(compiled.querySelector('.update-anchor')).toBeTruthy();
   });
 
   it('should not render banner when no update is available', async () => {
