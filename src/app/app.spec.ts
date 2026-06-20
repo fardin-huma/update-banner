@@ -25,7 +25,7 @@ describe('App', () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.textContent).toContain('Version 0.3.0');
-    expect(compiled.textContent).toContain('Update Banner v0.3.0');
+    expect(compiled.textContent).toContain('Version 0.4.0');
+    expect(compiled.textContent).toContain('Update Banner v0.4.0');
   });
 });

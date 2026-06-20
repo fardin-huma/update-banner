@@ -21,6 +21,15 @@
       }
     </div>
 
+    <section class="release-panel" aria-label="Latest release details">
+      <p class="release-panel-label">What is new in this release</p>
+      <h2>Force-update guard for major and minor upgrades</h2>
+      <p>
+        Patch and prerelease updates stay non-blocking, while minor and major updates now
+        require a hard refresh with cache-busting for safer rollout control.
+      </p>
+    </section>
+
     <footer class="app-footer">
       <p>Update Banner v{{ version() }}</p>
       <p>© {{ currentYear() }} Fardin Huma. All deployments are tracked.</p>
