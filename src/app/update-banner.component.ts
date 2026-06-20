@@ -1,7 +1,6 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  DestroyRef,
   effect,
   inject,
   input,
@@ -12,6 +11,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { UpdateCheckerService } from './update-checker.service';
 import { UpdateRequiredDialogComponent } from './update-required-dialog.component';
+import { UpdateSnackbarComponent } from './update-snackbar.component';
 
 @Component({
   selector: 'app-update-banner',
@@ -24,7 +24,6 @@ export class UpdateBannerComponent {
   private readonly updateChecker = inject(UpdateCheckerService);
   private readonly snackBar = inject(MatSnackBar);
   private readonly dialog = inject(MatDialog);
-  private readonly destroyRef = inject(DestroyRef);
 
   private softShownForVersion: string | null = null;
   private forceShownForVersion: string | null = null;
@@ -75,18 +74,15 @@ export class UpdateBannerComponent {
 
     this.softShownForVersion = latestVersion;
     const text = message?.title || message?.message || `A new version (${latestVersion}) is available.`;
-    const snackBarRef = this.snackBar.open(text, 'Refresh now', {
-      duration: 12000,
+    this.snackBar.openFromComponent(UpdateSnackbarComponent, {
       horizontalPosition: 'right',
-      verticalPosition: 'top'
-    });
-
-    const actionSubscription = snackBarRef.onAction().subscribe(() => {
-      this.onRefresh();
-    });
-
-    this.destroyRef.onDestroy(() => {
-      actionSubscription.unsubscribe();
+      verticalPosition: 'top',
+      data: {
+        text,
+        onRefresh: () => {
+          untracked(() => this.onRefresh());
+        }
+      }
     });
   }
 
