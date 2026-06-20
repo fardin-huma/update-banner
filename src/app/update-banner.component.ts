@@ -54,7 +54,7 @@ export class UpdateBannerComponent {
       if (forceUpdate) {
         this.showForceDialog(latest, message);
       } else {
-        this.showSoftToast(latest, message);
+        this.showSoftToast(latest);
       }
     });
   }
@@ -64,16 +64,13 @@ export class UpdateBannerComponent {
     this.updateChecker.reloadForUpdate();
   }
 
-  private showSoftToast(
-    latestVersion: string,
-    message: { title?: string; message?: string } | null
-  ): void {
+  private showSoftToast(latestVersion: string): void {
     if (this.softShownForVersion === latestVersion) {
       return;
     }
 
     this.softShownForVersion = latestVersion;
-    const text = message?.title || message?.message || `A new version (${latestVersion}) is available.`;
+    const text = `A new version (${latestVersion}) is available. Refresh to update.`;
     this.snackBar.openFromComponent(UpdateSnackbarComponent, {
       horizontalPosition: 'right',
       verticalPosition: 'top',

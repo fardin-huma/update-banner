@@ -1,6 +1,6 @@
 {
   "name": "update-banner",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "scripts": {
     "sync:version": "node scripts/sync-version.mjs",
     "ng": "ng",
