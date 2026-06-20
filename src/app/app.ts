@@ -28,7 +28,8 @@ export class App implements OnInit, OnDestroy {
     'Instant release notes',
     'Clean deployment flow',
     'Banner-ready updates',
-    'Angular 21 + signals'
+    'Angular 21 + signals',
+    'Live update pulse enabled'
   ];
 
   ngOnInit(): void {
