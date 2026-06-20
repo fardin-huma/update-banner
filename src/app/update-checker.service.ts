@@ -31,6 +31,8 @@ export class UpdateCheckerService {
   readonly forceUpdateRequired = signal(false);
   readonly updateLevel = signal<UpdateLevel>('none');
   readonly latestVersion = signal('0.0.0');
+  // Fetched from public/release-message/general.json and consumed by the blocking
+  // update dialog (minor/major). Soft updates intentionally ignore this message.
   private readonly mutableReleaseMessage = signal<ReleaseMessage | null>(null);
   readonly releaseMessage = this.mutableReleaseMessage.asReadonly();
 
