@@ -1,8 +1,8 @@
 {
   "appName": "update-banner",
   "schemaVersion": 1,
-  "version": "0.0.2",
-  "builtAt": "2026-06-20T19:41:59.726Z",
+  "version": "0.0.4-rc.0",
+  "builtAt": "2026-06-20T20:03:47.994Z",
   "environment": "development",
   "release": {
     "shortSha": null,

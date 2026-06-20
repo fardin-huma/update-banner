@@ -16,6 +16,7 @@ export class UpdateBannerComponent {
   readonly refreshClicked = output<void>();
 
   protected readonly updateAvailable = this.updateChecker.updateAvailable;
+  protected readonly forceUpdateRequired = this.updateChecker.forceUpdateRequired;
   protected readonly latestVersion = this.updateChecker.latestVersion;
   protected readonly releaseMessage = releaseMessage;
 

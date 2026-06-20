@@ -1,4 +1,24 @@
-@if (updateAvailable()) {
+@if (forceUpdateRequired()) {
+  <section class="update-blocker" role="dialog" aria-modal="true" aria-labelledby="force-update-title">
+    <div class="update-blocker-card">
+      <h2 id="force-update-title">Update required</h2>
+      @if (releaseMessage) {
+        @if (releaseMessage.title) {
+          <p class="update-title">{{ releaseMessage.title }}</p>
+        }
+        @if (releaseMessage.message) {
+          <p class="update-message">{{ releaseMessage.message }}</p>
+        }
+      } @else {
+        <p>
+          A new version ({{ latestVersion() }}) requires a mandatory update. You need to
+          refresh before continuing.
+        </p>
+      }
+      <button type="button" (click)="onRefresh()">Update now</button>
+    </div>
+  </section>
+} @else if (updateAvailable()) {
   <aside class="update-banner" role="status" aria-live="polite">
     @if (releaseMessage) {
       @if (releaseMessage.title) {
