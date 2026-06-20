@@ -36,6 +36,7 @@ export class App implements OnInit, OnDestroy {
     this.updateChecker.startChecking({
       currentVersion: this.version(),
       manifestUrl: './version.json',
+      notifyOnReleaseChangeWithSameVersion: true,
       intervalMs: 60000
     });
   }

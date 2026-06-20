@@ -15,6 +15,7 @@ const runNumber = firstNonEmpty(process.env.GITHUB_RUN_NUMBER) ?? null;
 const environment =
   firstNonEmpty(process.env.APP_ENV, process.env.NODE_ENV) ??
   (process.env.GITHUB_ACTIONS ? 'production' : 'development');
+const release = shortSha && runNumber ? `${shortSha}-${runNumber}` : null;
 
 const manifest = {
   appName: packageJson.name,
@@ -22,10 +23,7 @@ const manifest = {
   version,
   builtAt: new Date().toISOString(),
   environment,
-  release: {
-    shortSha,
-    runNumber
-  }
+  release
 };
 
 fs.mkdirSync(path.dirname(versionManifestPath), { recursive: true });

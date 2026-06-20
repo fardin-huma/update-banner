@@ -4,6 +4,7 @@ export interface UpdateCheckOptions {
   currentVersion: string;
   manifestUrl?: string;
   releaseMessageUrl?: string;
+  notifyOnReleaseChangeWithSameVersion?: boolean;
   intervalMs?: number;
 }
 
@@ -14,6 +15,7 @@ interface ReleaseMessage {
 
 interface VersionManifest {
   version?: string;
+  release?: string;
 }
 
 type UpdateLevel = 'none' | 'patch' | 'minor' | 'major';
@@ -39,6 +41,8 @@ export class UpdateCheckerService {
   private currentVersion = '0.0.0';
   private manifestUrl = './version.json';
   private releaseMessageUrl = './release-message/general.json';
+  private notifyOnReleaseChangeWithSameVersion = false;
+  private lastSeenReleaseTag: string | null = null;
   private intervalMs = 60000;
   private checkTimer?: ReturnType<typeof setInterval>;
 
@@ -46,12 +50,15 @@ export class UpdateCheckerService {
     this.currentVersion = options.currentVersion;
     this.manifestUrl = options.manifestUrl ?? './version.json';
     this.releaseMessageUrl = options.releaseMessageUrl ?? './release-message/general.json';
+    this.notifyOnReleaseChangeWithSameVersion =
+      options.notifyOnReleaseChangeWithSameVersion ?? false;
     this.intervalMs = options.intervalMs ?? 60000;
     this.updateAvailable.set(false);
     this.forceUpdateRequired.set(false);
     this.updateLevel.set('none');
     this.latestVersion.set(this.currentVersion);
     this.mutableReleaseMessage.set(null);
+    this.lastSeenReleaseTag = null;
 
     this.stopChecking();
     void this.checkForUpdates();
@@ -88,21 +95,39 @@ export class UpdateCheckerService {
         return;
       }
 
+      const remoteReleaseTag = this.normalizeReleaseTag(payload.release);
+
       this.latestVersion.set(remoteVersion);
       const versionComparison = this.compareVersions(remoteVersion, this.currentVersion);
-      if (versionComparison <= 0) {
+
+      const sameVersionReleaseChanged =
+        this.notifyOnReleaseChangeWithSameVersion &&
+        versionComparison === 0 &&
+        this.lastSeenReleaseTag !== null &&
+        remoteReleaseTag !== null &&
+        this.lastSeenReleaseTag !== remoteReleaseTag;
+
+      if (versionComparison <= 0 && !sameVersionReleaseChanged) {
         this.updateAvailable.set(false);
         this.forceUpdateRequired.set(false);
         this.updateLevel.set('none');
         this.mutableReleaseMessage.set(null);
+        this.lastSeenReleaseTag = remoteReleaseTag;
         return;
       }
 
-      const level = this.detectUpdateLevel(this.currentVersion, remoteVersion);
+      const level =
+        versionComparison > 0
+          ? this.detectUpdateLevel(this.currentVersion, remoteVersion)
+          : 'patch';
+
       this.updateLevel.set(level);
       this.updateAvailable.set(true);
       this.forceUpdateRequired.set(level === 'minor' || level === 'major');
-      this.mutableReleaseMessage.set(await this.fetchReleaseMessage());
+      this.mutableReleaseMessage.set(
+        level === 'minor' || level === 'major' ? await this.fetchReleaseMessage() : null
+      );
+      this.lastSeenReleaseTag = remoteReleaseTag;
     } catch {
       this.updateAvailable.set(false);
       this.forceUpdateRequired.set(false);
@@ -146,6 +171,19 @@ export class UpdateCheckerService {
       ...(safeTitle ? { title: safeTitle } : {}),
       ...(safeMessage ? { message: safeMessage } : {})
     };
+  }
+
+  private normalizeReleaseTag(value: string | undefined): string | null {
+    if (typeof value !== 'string') {
+      return null;
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    return trimmed.slice(0, 100);
   }
 
   private detectUpdateLevel(currentVersion: string, remoteVersion: string): UpdateLevel {
