@@ -36,6 +36,39 @@
   animation: rise-in 700ms ease-out;
 }
 
+.update-banner {
+  margin-bottom: 18px;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  border-radius: 14px;
+  border: 1px solid #4dd3bc;
+  background: linear-gradient(95deg, rgb(16 62 77 / 85%) 0%, rgb(20 49 94 / 88%) 100%);
+}
+
+.update-banner p {
+  margin: 0;
+  color: #dbfff7;
+  font-size: 0.92rem;
+}
+
+.update-banner button {
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-weight: 700;
+  background: #56f0d0;
+  color: #05231f;
+  cursor: pointer;
+}
+
+.update-banner button:hover {
+  filter: brightness(1.04);
+}
+
 .eyebrow {
   margin: 0;
   font-size: 0.85rem;
@@ -106,6 +139,22 @@ h1 {
   color: var(--text-main);
 }
 
+.app-footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgb(255 255 255 / 12%);
+  color: var(--text-soft);
+  display: flex;
+  justify-content: space-between;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+  font-size: 0.84rem;
+}
+
+.app-footer p {
+  margin: 0;
+}
+
 @keyframes rise-in {
   from {
     opacity: 0;
@@ -125,5 +174,9 @@ h1 {
 
   .chip-grid {
     grid-template-columns: 1fr;
+  }
+
+  .app-footer {
+    flex-direction: column;
   }
 }

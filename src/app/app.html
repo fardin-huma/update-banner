@@ -1,5 +1,15 @@
 <main class="page-shell" aria-labelledby="app-title">
   <section class="hero-card">
+    @if (updateAvailable()) {
+      <aside class="update-banner" role="status" aria-live="polite">
+        <p>
+          A new version ({{ latestVersion() }}) is available. Refresh to update from
+          {{ version() }}.
+        </p>
+        <button type="button" (click)="reloadForUpdate()">Refresh now</button>
+      </aside>
+    }
+
     <p class="eyebrow">Release cockpit</p>
     <h1 id="app-title">{{ title() }}</h1>
     <p class="subtitle">
@@ -18,5 +28,10 @@
         <span class="chip">{{ chip }}</span>
       }
     </div>
+
+    <footer class="app-footer">
+      <p>Update Banner v{{ version() }}</p>
+      <p>© {{ currentYear() }} Fardin Huma. All deployments are tracked.</p>
+    </footer>
   </section>
 </main>
