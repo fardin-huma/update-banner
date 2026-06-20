@@ -2,12 +2,12 @@
   <section class="update-blocker" role="dialog" aria-modal="true" aria-labelledby="force-update-title">
     <div class="update-blocker-card">
       <h2 id="force-update-title">Update required</h2>
-      @if (releaseMessage) {
-        @if (releaseMessage.title) {
-          <p class="update-title">{{ releaseMessage.title }}</p>
+      @if (releaseMessage(); as msg) {
+        @if (msg.title) {
+          <p class="update-title">{{ msg.title }}</p>
         }
-        @if (releaseMessage.message) {
-          <p class="update-message">{{ releaseMessage.message }}</p>
+        @if (msg.message) {
+          <p class="update-message">{{ msg.message }}</p>
         }
       } @else {
         <p>
@@ -20,12 +20,12 @@
   </section>
 } @else if (updateAvailable()) {
   <aside class="update-banner" role="status" aria-live="polite">
-    @if (releaseMessage) {
-      @if (releaseMessage.title) {
-        <p class="update-title">{{ releaseMessage.title }}</p>
+    @if (releaseMessage(); as msg) {
+      @if (msg.title) {
+        <p class="update-title">{{ msg.title }}</p>
       }
-      @if (releaseMessage.message) {
-        <p class="update-message">{{ releaseMessage.message }}</p>
+      @if (msg.message) {
+        <p class="update-message">{{ msg.message }}</p>
       }
     } @else {
       <p>

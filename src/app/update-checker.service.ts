@@ -3,7 +3,13 @@ import { Injectable, signal } from '@angular/core';
 export interface UpdateCheckOptions {
   currentVersion: string;
   manifestUrl?: string;
+  releaseMessageUrl?: string;
   intervalMs?: number;
+}
+
+interface ReleaseMessage {
+  title?: string;
+  message?: string;
 }
 
 interface VersionManifest {
@@ -25,20 +31,25 @@ export class UpdateCheckerService {
   readonly forceUpdateRequired = signal(false);
   readonly updateLevel = signal<UpdateLevel>('none');
   readonly latestVersion = signal('0.0.0');
+  private readonly mutableReleaseMessage = signal<ReleaseMessage | null>(null);
+  readonly releaseMessage = this.mutableReleaseMessage.asReadonly();
 
   private currentVersion = '0.0.0';
   private manifestUrl = './version.json';
+  private releaseMessageUrl = './release-message/general.json';
   private intervalMs = 60000;
   private checkTimer?: ReturnType<typeof setInterval>;
 
   startChecking(options: UpdateCheckOptions): void {
     this.currentVersion = options.currentVersion;
     this.manifestUrl = options.manifestUrl ?? './version.json';
+    this.releaseMessageUrl = options.releaseMessageUrl ?? './release-message/general.json';
     this.intervalMs = options.intervalMs ?? 60000;
     this.updateAvailable.set(false);
     this.forceUpdateRequired.set(false);
     this.updateLevel.set('none');
     this.latestVersion.set(this.currentVersion);
+    this.mutableReleaseMessage.set(null);
 
     this.stopChecking();
     void this.checkForUpdates();
@@ -81,6 +92,7 @@ export class UpdateCheckerService {
         this.updateAvailable.set(false);
         this.forceUpdateRequired.set(false);
         this.updateLevel.set('none');
+        this.mutableReleaseMessage.set(null);
         return;
       }
 
@@ -88,11 +100,50 @@ export class UpdateCheckerService {
       this.updateLevel.set(level);
       this.updateAvailable.set(true);
       this.forceUpdateRequired.set(level === 'minor' || level === 'major');
+      this.mutableReleaseMessage.set(await this.fetchReleaseMessage());
     } catch {
       this.updateAvailable.set(false);
       this.forceUpdateRequired.set(false);
       this.updateLevel.set('none');
+      this.mutableReleaseMessage.set(null);
     }
+  }
+
+  private async fetchReleaseMessage(): Promise<ReleaseMessage | null> {
+    try {
+      const response = await fetch(`${this.releaseMessageUrl}?t=${Date.now()}`, {
+        cache: 'no-store'
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const payload = (await response.json()) as ReleaseMessage;
+      return this.sanitizeReleaseMessage(payload);
+    } catch {
+      return null;
+    }
+  }
+
+  private sanitizeReleaseMessage(value: ReleaseMessage | undefined): ReleaseMessage | null {
+    if (!value) {
+      return null;
+    }
+
+    const safeTitle =
+      typeof value.title === 'string' ? value.title.trim().slice(0, 140) : '';
+    const safeMessage =
+      typeof value.message === 'string' ? value.message.trim().slice(0, 500) : '';
+
+    if (!safeTitle && !safeMessage) {
+      return null;
+    }
+
+    return {
+      ...(safeTitle ? { title: safeTitle } : {}),
+      ...(safeMessage ? { message: safeMessage } : {})
+    };
   }
 
   private detectUpdateLevel(currentVersion: string, remoteVersion: string): UpdateLevel {

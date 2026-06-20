@@ -1,6 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
 import { UpdateCheckerService } from './update-checker.service';
-import { releaseMessage } from './release-message';
 
 @Component({
   selector: 'app-update-banner',
@@ -18,7 +17,7 @@ export class UpdateBannerComponent {
   protected readonly updateAvailable = this.updateChecker.updateAvailable;
   protected readonly forceUpdateRequired = this.updateChecker.forceUpdateRequired;
   protected readonly latestVersion = this.updateChecker.latestVersion;
-  protected readonly releaseMessage = releaseMessage;
+  protected readonly releaseMessage = this.updateChecker.releaseMessage;
 
   protected onRefresh(): void {
     this.refreshClicked.emit();
