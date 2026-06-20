@@ -1,14 +1,6 @@
 <main class="page-shell" aria-labelledby="app-title">
   <section class="hero-card">
-    @if (updateAvailable()) {
-      <aside class="update-banner" role="status" aria-live="polite">
-        <p>
-          A new version ({{ latestVersion() }}) is available. Refresh to update from
-          {{ version() }}.
-        </p>
-        <button type="button" (click)="reloadForUpdate()">Refresh now</button>
-      </aside>
-    }
+    <app-update-banner [currentVersion]="version()" />
 
     <p class="eyebrow">Release cockpit</p>
     <h1 id="app-title">{{ title() }}</h1>

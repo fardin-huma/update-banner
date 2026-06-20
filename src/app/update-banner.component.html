@@ -1,0 +1,18 @@
+@if (updateAvailable()) {
+  <aside class="update-banner" role="status" aria-live="polite">
+    @if (releaseMessage) {
+      @if (releaseMessage.title) {
+        <p class="update-title">{{ releaseMessage.title }}</p>
+      }
+      @if (releaseMessage.message) {
+        <p class="update-message">{{ releaseMessage.message }}</p>
+      }
+    } @else {
+      <p>
+        A new version ({{ latestVersion() }}) is available. Refresh to update from
+        {{ currentVersion() }}.
+      </p>
+    }
+    <button type="button" (click)="onRefresh()">Refresh now</button>
+  </aside>
+}

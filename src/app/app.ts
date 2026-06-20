@@ -7,11 +7,12 @@ import {
   signal
 } from '@angular/core';
 import packageJson from '../../package.json';
+import { UpdateBannerComponent } from './update-banner.component';
 import { UpdateCheckerService } from './update-checker.service';
 
 @Component({
   selector: 'app-root',
-  imports: [],
+  imports: [UpdateBannerComponent],
   templateUrl: './app.html',
   styleUrl: './app.css',
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -22,8 +23,7 @@ export class App implements OnInit, OnDestroy {
   protected readonly title = signal('Update Banner');
   protected readonly version = signal(packageJson.version);
   protected readonly currentYear = signal(new Date().getFullYear());
-  protected readonly updateAvailable = this.updateChecker.updateAvailable;
-  protected readonly latestVersion = this.updateChecker.latestVersion;
+
   protected readonly chips = [
     'Instant release notes',
     'Clean deployment flow',
@@ -42,9 +42,5 @@ export class App implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.updateChecker.stopChecking();
-  }
-
-  protected reloadForUpdate(): void {
-    this.updateChecker.reloadForUpdate();
   }
 }

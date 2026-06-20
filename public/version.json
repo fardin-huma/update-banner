@@ -1,13 +1,11 @@
 {
   "appName": "update-banner",
-  "appVersion": 1,
-  "version": "0.0.1",
-  "builtAt": "2026-06-20T18:59:51.854Z",
-  "environment": "production",
-  "repository": "update-banner",
-  "branch": "local",
-  "commitSha": "local",
-  "shortSha": "local",
-  "runNumber": null,
-  "builtBy": "Fardin"
+  "schemaVersion": 1,
+  "version": "0.0.2",
+  "builtAt": "2026-06-20T19:41:59.726Z",
+  "environment": "development",
+  "release": {
+    "shortSha": null,
+    "runNumber": null
+  }
 }
