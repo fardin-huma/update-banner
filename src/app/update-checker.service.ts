@@ -44,6 +44,7 @@ export class UpdateCheckerService {
   private releaseMessageUrl = './release-message/general.json';
   private notifyOnReleaseChangeWithSameVersion = false;
   private lastSeenReleaseTag: string | null = null;
+  private activeSameVersionReleaseTag: string | null = null;
   private intervalMs = 60000;
   private checkTimer?: ReturnType<typeof setInterval>;
 
@@ -61,6 +62,7 @@ export class UpdateCheckerService {
     this.latestReleaseTag.set(null);
     this.mutableReleaseMessage.set(null);
     this.lastSeenReleaseTag = null;
+    this.activeSameVersionReleaseTag = null;
 
     this.stopChecking();
     void this.checkForUpdates();
@@ -109,6 +111,22 @@ export class UpdateCheckerService {
         this.lastSeenReleaseTag !== remoteReleaseTag;
 
       if (versionComparison <= 0 && !sameVersionReleaseChanged) {
+        const keepSameVersionSoftUpdate =
+          this.notifyOnReleaseChangeWithSameVersion &&
+          versionComparison === 0 &&
+          this.activeSameVersionReleaseTag !== null &&
+          remoteReleaseTag === this.activeSameVersionReleaseTag;
+
+        if (keepSameVersionSoftUpdate) {
+          this.updateAvailable.set(true);
+          this.forceUpdateRequired.set(false);
+          this.updateLevel.set('patch');
+          this.mutableReleaseMessage.set(null);
+          this.lastSeenReleaseTag = remoteReleaseTag;
+          return;
+        }
+
+        this.activeSameVersionReleaseTag = null;
         this.updateAvailable.set(false);
         this.forceUpdateRequired.set(false);
         this.updateLevel.set('none');
@@ -122,6 +140,11 @@ export class UpdateCheckerService {
           ? this.detectUpdateLevel(this.currentVersion, remoteVersion)
           : 'patch';
 
+      this.activeSameVersionReleaseTag =
+        versionComparison === 0 && this.notifyOnReleaseChangeWithSameVersion
+          ? remoteReleaseTag
+          : null;
+
       this.updateLevel.set(level);
       this.updateAvailable.set(true);
       this.forceUpdateRequired.set(level === 'minor' || level === 'major');
@@ -130,6 +153,7 @@ export class UpdateCheckerService {
       );
       this.lastSeenReleaseTag = remoteReleaseTag;
     } catch {
+      this.activeSameVersionReleaseTag = null;
       this.updateAvailable.set(false);
       this.forceUpdateRequired.set(false);
       this.updateLevel.set('none');
