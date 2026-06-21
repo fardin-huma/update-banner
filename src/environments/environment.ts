@@ -3,6 +3,6 @@ export const environment = {
   name: 'Update Banner',
   manifestUrl: './version.json',
   releaseMessageUrl: './release-message/general.json',
-  notifyOnReleaseChangeWithSameVersion: true,
+  notifyOnDeploymentWithSameVersion: true,
   intervalMs: 60000
 };

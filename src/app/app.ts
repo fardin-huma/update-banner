@@ -38,8 +38,8 @@ export class App implements OnInit, OnDestroy {
       currentVersion: this.version(),
       manifestUrl: environment.manifestUrl,
       releaseMessageUrl: environment.releaseMessageUrl,
-      notifyOnReleaseChangeWithSameVersion:
-        environment.notifyOnReleaseChangeWithSameVersion,
+      notifyOnDeploymentWithSameVersion:
+        environment.notifyOnDeploymentWithSameVersion,
       intervalMs: environment.intervalMs
     });
   }

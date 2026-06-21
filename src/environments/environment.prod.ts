@@ -3,6 +3,6 @@ export const environment = {
   name: 'Prod',
   manifestUrl: './version.json',
   releaseMessageUrl: './release-message/general.json',
-  notifyOnReleaseChangeWithSameVersion: false,
+  notifyOnDeploymentWithSameVersion: false,
   intervalMs: 60000
 };

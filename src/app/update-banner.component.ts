@@ -34,7 +34,7 @@ export class UpdateBannerComponent {
   protected readonly updateAvailable = this.updateChecker.updateAvailable;
   protected readonly forceUpdateRequired = this.updateChecker.forceUpdateRequired;
   protected readonly latestVersion = this.updateChecker.latestVersion;
-  protected readonly latestReleaseTag = this.updateChecker.latestReleaseTag;
+  protected readonly latestReleaseInfo = this.updateChecker.latestReleaseInfo;
   protected readonly releaseMessage = this.updateChecker.releaseMessage;
 
   constructor() {
@@ -42,7 +42,7 @@ export class UpdateBannerComponent {
       const updateAvailable = this.updateAvailable();
       const forceUpdate = this.forceUpdateRequired();
       const latest = this.latestVersion();
-      const latestReleaseTag = this.latestReleaseTag();
+      const latestReleaseInfo = this.latestReleaseInfo();
       const message = this.releaseMessage();
 
       if (!updateAvailable) {
@@ -56,7 +56,7 @@ export class UpdateBannerComponent {
       if (forceUpdate) {
         this.showForceDialog(latest, message);
       } else {
-        this.showSoftToast(latest, latestReleaseTag);
+        this.showSoftToast(latest, latestReleaseInfo);
       }
     });
   }
@@ -66,8 +66,8 @@ export class UpdateBannerComponent {
     this.updateChecker.reloadForUpdate();
   }
 
-  private showSoftToast(latestVersion: string, latestReleaseTag: string | null): void {
-    const softKey = `${latestVersion}|${latestReleaseTag ?? 'none'}`;
+  private showSoftToast(latestVersion: string, latestReleaseInfo: string | null): void {
+    const softKey = `${latestVersion}|${latestReleaseInfo ?? 'none'}`;
     if (this.softShownForKey === softKey) {
       return;
     }

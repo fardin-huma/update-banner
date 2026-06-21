@@ -1,10 +1,13 @@
-import { Injectable, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { DestroyRef, inject, Injectable, signal } from '@angular/core';
+import { catchError, filter, map, Observable, of, Subscription, switchMap, timer } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 export interface UpdateCheckOptions {
   currentVersion: string;
-  manifestUrl?: string;
-  releaseMessageUrl?: string;
-  notifyOnReleaseChangeWithSameVersion?: boolean;
+  manifestUrl: string;
+  releaseMessageUrl: string;
+  notifyOnDeploymentWithSameVersion?: boolean;
   intervalMs?: number;
 }
 
@@ -18,65 +21,129 @@ interface VersionManifest {
   release?: string;
 }
 
-type UpdateLevel = 'none' | 'patch' | 'minor' | 'major';
+type UpdateLevel = 'none' | 'patch' | 'prerelease' | 'minor' | 'major';
 
 interface ParsedVersion {
   major: number;
   minor: number;
   patch: number;
-  prerelease: string[];
+  prerelease: string|null;
 }
 
 @Injectable({ providedIn: 'root' })
 export class UpdateCheckerService {
+  private readonly _http = inject(HttpClient);
+  private readonly _destroyRef = inject(DestroyRef);
+
+  // Public reactive state consumed by UI components.
   readonly updateAvailable = signal(false);
   readonly forceUpdateRequired = signal(false);
   readonly updateLevel = signal<UpdateLevel>('none');
   readonly latestVersion = signal('0.0.0');
-  readonly latestReleaseTag = signal<string | null>(null);
+  readonly latestReleaseInfo = signal<string | null>(null);
+
   // Fetched from public/release-message/general.json and consumed by the blocking
   // update dialog (minor/major). Soft updates intentionally ignore this message.
   private readonly mutableReleaseMessage = signal<ReleaseMessage | null>(null);
   readonly releaseMessage = this.mutableReleaseMessage.asReadonly();
 
+  // Runtime configuration and internal polling state.
   private currentVersion = '0.0.0';
-  private manifestUrl = './version.json';
-  private releaseMessageUrl = './release-message/general.json';
-  private notifyOnReleaseChangeWithSameVersion = false;
-  private lastSeenReleaseTag: string | null = null;
-  private activeSameVersionReleaseTag: string | null = null;
-  private intervalMs = 60000;
-  private checkTimer?: ReturnType<typeof setInterval>;
+  private currentReleaseInfo: string | null = null;
+  
+  private _manifestUrl = '';
+  private _releaseMessageUrl = '';
+  private _notifyOnDeploymentWithSameVersion = false;
+  private _pollSubscription?: Subscription;
 
+
+  /**
+   * Starts periodic update checks.
+   *
+   * Required URLs are provided by the app environment so the service stays
+   * deployment-agnostic and does not rely on hardcoded endpoints.
+   */
   startChecking(options: UpdateCheckOptions): void {
     this.currentVersion = options.currentVersion;
-    this.manifestUrl = options.manifestUrl ?? './version.json';
-    this.releaseMessageUrl = options.releaseMessageUrl ?? './release-message/general.json';
-    this.notifyOnReleaseChangeWithSameVersion =
-      options.notifyOnReleaseChangeWithSameVersion ?? false;
-    this.intervalMs = options.intervalMs ?? 60000;
-    this.updateAvailable.set(false);
-    this.forceUpdateRequired.set(false);
-    this.updateLevel.set('none');
-    this.latestVersion.set(this.currentVersion);
-    this.latestReleaseTag.set(null);
-    this.mutableReleaseMessage.set(null);
-    this.lastSeenReleaseTag = null;
-    this.activeSameVersionReleaseTag = null;
+      this.updateAvailable.set(false);
+      this.forceUpdateRequired.set(false);
+      this.updateLevel.set('none');
+      this.latestVersion.set(this.currentVersion);
+      this.latestReleaseInfo.set(null);
+      this.mutableReleaseMessage.set(null);
+      this.currentReleaseInfo = null;
+      
+      const intervalMs = options.intervalMs ?? 60000;
+      this._manifestUrl = options.manifestUrl;
+      this._releaseMessageUrl = options.releaseMessageUrl;
+      this._notifyOnDeploymentWithSameVersion = options.notifyOnDeploymentWithSameVersion ?? false;
 
-    this.stopChecking();
-    void this.checkForUpdates();
-    this.checkTimer = setInterval(() => {
-      void this.checkForUpdates();
-    }, this.intervalMs);
+    // Immediately check for updates and then start polling.
+    this._pollSubscription = timer(0, intervalMs)
+      .pipe(
+        switchMap(() => this._checkForUpdates()),
+        filter((manifest): manifest is VersionManifest => manifest !== null),
+        map((manifest) => ({
+          level: this._detectUpdateLevel(manifest.version ?? '', this.currentVersion),
+          manifest
+        })),
+        switchMap(({ level, manifest }) => {
+          if (level === 'minor' || level === 'major') {
+            return this._getReleaseMessage().pipe(
+              map((releaseMessage) => ({ level, manifest, releaseMessage }))
+            );
+          }
+          return of({ level, manifest, releaseMessage: null });
+        }),
+        takeUntilDestroyed(this._destroyRef))
+      .subscribe((data) => {
+        const { level, manifest, releaseMessage } = data;
+        const latestVersion = manifest.version?.trim() ?? 'unknown';
+        const releaseInfo = manifest.release?.trim() ?? null;
+
+        this.latestVersion.set(latestVersion);
+        this.latestReleaseInfo.set(releaseInfo);
+        this.mutableReleaseMessage.set(releaseMessage);
+        
+
+        if (level === 'none') {
+          if (this._notifyOnDeploymentWithSameVersion && releaseInfo) {
+            if (this.currentReleaseInfo === null) {
+              this.updateAvailable.set(false);
+              this.forceUpdateRequired.set(false);
+              this.updateLevel.set('none');
+            } else if (releaseInfo !== this.currentReleaseInfo) {
+              this.updateAvailable.set(true);
+              this.forceUpdateRequired.set(false);
+              this.updateLevel.set('patch');
+            } else {
+              this.updateAvailable.set(false);
+              this.forceUpdateRequired.set(false);
+              this.updateLevel.set('none');
+            }
+          } else {
+            this.updateAvailable.set(false);
+            this.forceUpdateRequired.set(false);
+            this.updateLevel.set('none');
+          }
+        } else {
+          this.updateAvailable.set(true);
+          this.forceUpdateRequired.set(level === 'minor' || level === 'major');
+          this.updateLevel.set(level);
+        }
+
+        this.currentReleaseInfo = releaseInfo;
+        
+      });
   }
 
+  /** Stops polling and invalidates in-flight async completion writes. */
   stopChecking(): void {
-    if (this.checkTimer) {
-      clearInterval(this.checkTimer);
-      this.checkTimer = undefined;
-    }
+    this._pollSubscription?.unsubscribe();
+    this._pollSubscription = undefined;
   }
+
+
 
   reloadForUpdate(): void {
     const targetUrl = new URL(window.location.href);
@@ -84,115 +151,38 @@ export class UpdateCheckerService {
     window.location.replace(targetUrl.toString());
   }
 
-  private async checkForUpdates(): Promise<void> {
-    try {
-      const response = await fetch(`${this.manifestUrl}?t=${Date.now()}`, {
-        cache: 'no-store'
-      });
-      if (!response.ok) {
-        return;
-      }
 
-      const payload = (await response.json()) as VersionManifest;
-      const remoteVersion = payload.version;
-      if (!remoteVersion) {
-        return;
-      }
-
-      const remoteReleaseTag = this.normalizeReleaseTag(payload.release);
-
-      this.latestVersion.set(remoteVersion);
-      this.latestReleaseTag.set(remoteReleaseTag);
-      const versionComparison = this.compareVersions(remoteVersion, this.currentVersion);
-
-      const sameVersionReleaseChanged =
-        this.notifyOnReleaseChangeWithSameVersion &&
-        versionComparison === 0 &&
-        this.lastSeenReleaseTag !== null &&
-        this.lastSeenReleaseTag !== remoteReleaseTag;
-
-      if (versionComparison <= 0 && !sameVersionReleaseChanged) {
-        const keepSameVersionSoftUpdate =
-          this.notifyOnReleaseChangeWithSameVersion &&
-          versionComparison === 0 &&
-          this.activeSameVersionReleaseTag !== null &&
-          remoteReleaseTag === this.activeSameVersionReleaseTag;
-
-        if (keepSameVersionSoftUpdate) {
-          this.updateAvailable.set(true);
-          this.forceUpdateRequired.set(false);
-          this.updateLevel.set('patch');
-          this.mutableReleaseMessage.set(null);
-          this.lastSeenReleaseTag = remoteReleaseTag;
-          return;
-        }
-
-        this.activeSameVersionReleaseTag = null;
-        this.updateAvailable.set(false);
-        this.forceUpdateRequired.set(false);
-        this.updateLevel.set('none');
-        this.mutableReleaseMessage.set(null);
-        this.lastSeenReleaseTag = remoteReleaseTag;
-        return;
-      }
-
-      const level =
-        versionComparison > 0
-          ? this.detectUpdateLevel(this.currentVersion, remoteVersion)
-          : 'patch';
-
-      this.activeSameVersionReleaseTag =
-        versionComparison === 0 && this.notifyOnReleaseChangeWithSameVersion
-          ? remoteReleaseTag
-          : null;
-
-      this.updateLevel.set(level);
-      this.updateAvailable.set(true);
-      this.forceUpdateRequired.set(level === 'minor' || level === 'major');
-      this.mutableReleaseMessage.set(
-        level === 'minor' || level === 'major' ? await this.fetchReleaseMessage() : null
-      );
-      this.lastSeenReleaseTag = remoteReleaseTag;
-    } catch {
-      this.activeSameVersionReleaseTag = null;
-      this.updateAvailable.set(false);
-      this.forceUpdateRequired.set(false);
-      this.updateLevel.set('none');
-      this.latestReleaseTag.set(null);
-      this.mutableReleaseMessage.set(null);
-    }
+  private _checkForUpdates() : Observable<VersionManifest | null> {    
+    return this._http.get<VersionManifest>(this._manifestUrl, { headers: { 'Cache-Control': 'no-store' } }).pipe(
+        map((manifest) => {
+            return {
+        version: typeof manifest.version === 'string' ? manifest.version.trim() : undefined,
+        release: typeof manifest.release === 'string' ? manifest.release.trim() : undefined,
+      };
+        }),
+        catchError(() => of(null))
+    );
   }
 
-  private async fetchReleaseMessage(): Promise<ReleaseMessage | null> {
-    try {
-      const response = await fetch(`${this.releaseMessageUrl}?t=${Date.now()}`, {
-        cache: 'no-store'
-      });
-
-      if (!response.ok) {
-        return null;
-      }
-
-      const payload = (await response.json()) as ReleaseMessage;
-      return this.sanitizeReleaseMessage(payload);
-    } catch {
-      return null;
-    }
+  private _getReleaseMessage(): Observable<ReleaseMessage | null> {
+    return this._http.get(this._releaseMessageUrl, { headers: { 'Cache-Control': 'no-store' } }).pipe(
+      map((response) => {
+        if (typeof response !== 'object' || response === null) return null;
+        return this._sanitizeReleaseMessage(response);
+      }),
+      catchError(() => of(null))
+    );
   }
 
-  private sanitizeReleaseMessage(value: ReleaseMessage | undefined): ReleaseMessage | null {
-    if (!value) {
-      return null;
-    }
+  private _sanitizeReleaseMessage(value?: ReleaseMessage ): ReleaseMessage | null {
+    if (!value) return null;
 
     const safeTitle =
-      typeof value.title === 'string' ? value.title.trim().slice(0, 140) : '';
+      typeof value.title === 'string' ? value.title.trim().slice(0, 500) : '';
     const safeMessage =
-      typeof value.message === 'string' ? value.message.trim().slice(0, 500) : '';
+      typeof value.message === 'string' ? value.message.trim().slice(0, 1000) : '';
 
-    if (!safeTitle && !safeMessage) {
-      return null;
-    }
+    if (!safeTitle && !safeMessage) return null;
 
     return {
       ...(safeTitle ? { title: safeTitle } : {}),
@@ -200,143 +190,34 @@ export class UpdateCheckerService {
     };
   }
 
-  private normalizeReleaseTag(value: unknown): string | null {
-    if (typeof value !== 'string') {
-      return null;
-    }
+  private _detectUpdateLevel(currentVersion: string, remoteVersion: string): UpdateLevel {
+    const current = this._parseVersion(currentVersion);
+    const remote = this._parseVersion(remoteVersion);
 
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return null;
-    }
 
-    return trimmed.slice(0, 100);
-  }
-
-  private detectUpdateLevel(currentVersion: string, remoteVersion: string): UpdateLevel {
-    const current = this.parseVersion(currentVersion);
-    const remote = this.parseVersion(remoteVersion);
-
-    // Prerelease updates are intentionally treated as patch-level (non-blocking).
-    if (
-      remote.prerelease.length > 0 ||
-      (current.prerelease.length > 0 &&
-        current.major === remote.major &&
-        current.minor === remote.minor &&
-        current.patch === remote.patch)
-    ) {
-      return 'patch';
-    }
-
-    if (remote.major > current.major) {
-      return 'major';
-    }
-
-    if (remote.major === current.major && remote.minor > current.minor) {
-      return 'minor';
-    }
-
-    if (
-      remote.major === current.major &&
-      remote.minor === current.minor &&
-      remote.patch > current.patch
-    ) {
-      return 'patch';
-    }
-
+    if (remote.major !== current.major) return 'major';
+    if (remote.minor !== current.minor) return 'minor';
+    if (remote.patch !== current.patch) return 'patch';
+    if (remote.prerelease !== current.prerelease) return 'prerelease';
+    
     return 'none';
   }
 
-  private parseVersion(value: string): ParsedVersion {
+  private _parseVersion(value: string): ParsedVersion {
     const [corePart, prereleasePart] = value.split('-', 2);
     const normalized = corePart
-      .split('.')
-      .slice(0, 3)
+      .split('.', 3)
       .map((part) => Number.parseInt(part, 10))
       .map((part) => (Number.isNaN(part) ? 0 : part));
 
+    const prerelease = prereleasePart ? String(prereleasePart.split('.').slice(1)) : null;
+
     return {
-      major: normalized[0] ?? 0,
-      minor: normalized[1] ?? 0,
-      patch: normalized[2] ?? 0,
-      prerelease: prereleasePart ? prereleasePart.split('.') : []
+      major: normalized[0],
+      minor: normalized[1],
+      patch: normalized[2],
+      prerelease,
     };
   }
 
-  private compareVersions(a: string, b: string): number {
-    const left = this.parseVersion(a);
-    const right = this.parseVersion(b);
-
-    if (left.major !== right.major) {
-      return left.major > right.major ? 1 : -1;
-    }
-
-    if (left.minor !== right.minor) {
-      return left.minor > right.minor ? 1 : -1;
-    }
-
-    if (left.patch !== right.patch) {
-      return left.patch > right.patch ? 1 : -1;
-    }
-
-    if (left.prerelease.length === 0 && right.prerelease.length > 0) {
-      return 1;
-    }
-
-    if (left.prerelease.length > 0 && right.prerelease.length === 0) {
-      return -1;
-    }
-
-    return this.comparePrerelease(left.prerelease, right.prerelease);
-  }
-
-  private comparePrerelease(left: string[], right: string[]): number {
-    const max = Math.max(left.length, right.length);
-
-    for (let index = 0; index < max; index += 1) {
-      const leftValue = left[index];
-      const rightValue = right[index];
-
-      if (leftValue === undefined) {
-        return -1;
-      }
-
-      if (rightValue === undefined) {
-        return 1;
-      }
-
-      const leftNumber = Number.parseInt(leftValue, 10);
-      const rightNumber = Number.parseInt(rightValue, 10);
-      const leftIsNumeric = !Number.isNaN(leftNumber) && `${leftNumber}` === leftValue;
-      const rightIsNumeric = !Number.isNaN(rightNumber) && `${rightNumber}` === rightValue;
-
-      if (leftIsNumeric && rightIsNumeric) {
-        if (leftNumber > rightNumber) {
-          return 1;
-        }
-        if (leftNumber < rightNumber) {
-          return -1;
-        }
-        continue;
-      }
-
-      if (leftIsNumeric && !rightIsNumeric) {
-        return -1;
-      }
-
-      if (!leftIsNumeric && rightIsNumeric) {
-        return 1;
-      }
-
-      if (leftValue > rightValue) {
-        return 1;
-      }
-
-      if (leftValue < rightValue) {
-        return -1;
-      }
-    }
-
-    return 0;
-  }
 }

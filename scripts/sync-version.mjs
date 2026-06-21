@@ -5,21 +5,15 @@ const root = process.cwd();
 const packagePath = path.join(root, 'package.json');
 const versionManifestPath = path.join(root, 'public', 'version.json');
 
-const firstNonEmpty = (...values) => values.find((value) => typeof value === 'string' && value.trim().length > 0);
+const nonEmptyString = (value) =>
+  typeof value === 'string' && value.trim().length > 0 ? value : null;
 
 const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+
 const version = packageJson.version ?? '0.0.0';
-const commitSha = firstNonEmpty(process.env.GITHUB_SHA) ?? null;
-const shortSha = commitSha ? commitSha.slice(0, 7) : null;
-const runNumber = firstNonEmpty(process.env.GITHUB_RUN_NUMBER) ?? null;
-const requestedConfiguration = firstNonEmpty(
-  process.env.APP_ENV,
-  process.env.NG_BUILD_CONFIGURATION,
-  process.env.npm_config_configuration
-);
-const environment =
-  firstNonEmpty(requestedConfiguration, process.env.NODE_ENV) ??
-  (process.env.GITHUB_ACTIONS ? 'production' : 'development');
+const shortSha = nonEmptyString(process.env.GITHUB_SHA)?.slice(0, 7) ?? null;
+const runNumber = nonEmptyString(process.env.GITHUB_RUN_NUMBER) ?? null;
+const environment = nonEmptyString(process.env.BUILD_CONFIGURATION) ?? 'development';
 const release = shortSha && runNumber ? `${shortSha}-${runNumber}` : null;
 
 const manifest = {
