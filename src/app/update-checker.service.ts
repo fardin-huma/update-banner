@@ -23,11 +23,17 @@ interface VersionManifest {
 
 type UpdateLevel = 'none' | 'patch' | 'prerelease' | 'minor' | 'major';
 
+interface PollResult {
+  level: UpdateLevel;
+  manifest: VersionManifest;
+  releaseMessage: ReleaseMessage | null;
+}
+
 interface ParsedVersion {
   major: number;
   minor: number;
   patch: number;
-  prerelease: string|null;
+  prerelease: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -50,12 +56,11 @@ export class UpdateCheckerService {
   // Runtime configuration and internal polling state.
   private currentVersion = '0.0.0';
   private currentReleaseInfo: string | null = null;
-  
+
   private _manifestUrl = '';
   private _releaseMessageUrl = '';
   private _notifyOnDeploymentWithSameVersion = false;
   private _pollSubscription?: Subscription;
-
 
   /**
    * Starts periodic update checks.
@@ -64,77 +69,42 @@ export class UpdateCheckerService {
    * deployment-agnostic and does not rely on hardcoded endpoints.
    */
   startChecking(options: UpdateCheckOptions): void {
+    this.stopChecking();
+
     this.currentVersion = options.currentVersion;
-      this.updateAvailable.set(false);
-      this.forceUpdateRequired.set(false);
-      this.updateLevel.set('none');
-      this.latestVersion.set(this.currentVersion);
-      this.latestReleaseInfo.set(null);
-      this.mutableReleaseMessage.set(null);
-      this.currentReleaseInfo = null;
-      
-      const intervalMs = options.intervalMs ?? 60000;
-      this._manifestUrl = options.manifestUrl;
-      this._releaseMessageUrl = options.releaseMessageUrl;
-      this._notifyOnDeploymentWithSameVersion = options.notifyOnDeploymentWithSameVersion ?? false;
+    this.updateAvailable.set(false);
+    this.forceUpdateRequired.set(false);
+    this.updateLevel.set('none');
+    this.latestVersion.set(this.currentVersion);
+    this.latestReleaseInfo.set(null);
+    this.mutableReleaseMessage.set(null);
+    this.currentReleaseInfo = null;
+
+    const intervalMs = options.intervalMs ?? 60000;
+    this._manifestUrl = options.manifestUrl;
+    this._releaseMessageUrl = options.releaseMessageUrl;
+    this._notifyOnDeploymentWithSameVersion =
+      options.notifyOnDeploymentWithSameVersion ?? false;
 
     // Immediately check for updates and then start polling.
     this._pollSubscription = timer(0, intervalMs)
       .pipe(
         switchMap(() => this._checkForUpdates()),
         filter((manifest): manifest is VersionManifest => manifest !== null),
-        map((manifest) => ({
-          level: this._detectUpdateLevel(manifest.version ?? '', this.currentVersion),
-          manifest
-        })),
+        map((manifest) => this._normalizeManifest(manifest)),
+        map((manifest) => this._resolveLevel(manifest)),
         switchMap(({ level, manifest }) => {
           if (level === 'minor' || level === 'major') {
             return this._getReleaseMessage().pipe(
               map((releaseMessage) => ({ level, manifest, releaseMessage }))
             );
           }
+
           return of({ level, manifest, releaseMessage: null });
         }),
-        takeUntilDestroyed(this._destroyRef))
-      .subscribe((data) => {
-        const { level, manifest, releaseMessage } = data;
-        const latestVersion = manifest.version?.trim() ?? 'unknown';
-        const releaseInfo = manifest.release?.trim() ?? null;
-
-        this.latestVersion.set(latestVersion);
-        this.latestReleaseInfo.set(releaseInfo);
-        this.mutableReleaseMessage.set(releaseMessage);
-        
-
-        if (level === 'none') {
-          if (this._notifyOnDeploymentWithSameVersion && releaseInfo) {
-            if (this.currentReleaseInfo === null) {
-              this.updateAvailable.set(false);
-              this.forceUpdateRequired.set(false);
-              this.updateLevel.set('none');
-            } else if (releaseInfo !== this.currentReleaseInfo) {
-              this.updateAvailable.set(true);
-              this.forceUpdateRequired.set(false);
-              this.updateLevel.set('patch');
-            } else {
-              this.updateAvailable.set(false);
-              this.forceUpdateRequired.set(false);
-              this.updateLevel.set('none');
-            }
-          } else {
-            this.updateAvailable.set(false);
-            this.forceUpdateRequired.set(false);
-            this.updateLevel.set('none');
-          }
-        } else {
-          this.updateAvailable.set(true);
-          this.forceUpdateRequired.set(level === 'minor' || level === 'major');
-          this.updateLevel.set(level);
-        }
-
-        this.currentReleaseInfo = releaseInfo;
-        
-      });
+        takeUntilDestroyed(this._destroyRef)
+      )
+      .subscribe((data) => this._applyResult(data));
   }
 
   /** Stops polling and invalidates in-flight async completion writes. */
@@ -143,46 +113,101 @@ export class UpdateCheckerService {
     this._pollSubscription = undefined;
   }
 
-
-
   reloadForUpdate(): void {
     const targetUrl = new URL(window.location.href);
     targetUrl.searchParams.set('_cb', Date.now().toString());
     window.location.replace(targetUrl.toString());
   }
 
+  private _applyResult(data: PollResult): void {
+    const { level, manifest, releaseMessage } = data;
+    const latestVersion = manifest.version ?? 'unknown';
+    const releaseInfo = manifest.release ?? null;
 
-  private _checkForUpdates() : Observable<VersionManifest | null> {    
-    return this._http.get<VersionManifest>(`${this._manifestUrl}?t=${Date.now()}`, { headers: { 'Cache-Control': 'no-store' } }).pipe(
-        map((manifest) => {
-            return {
-        version: typeof manifest.version === 'string' ? manifest.version.trim() : undefined,
-        release: typeof manifest.release === 'string' ? manifest.release.trim() : undefined,
-      };
-        }),
+    this.latestVersion.set(latestVersion);
+    this.latestReleaseInfo.set(releaseInfo);
+    this.mutableReleaseMessage.set(releaseMessage);
+
+    if (level === 'none') {
+      const showSameVersionDeployment = this._shouldShowSameVersionDeployment(releaseInfo);
+
+      this.updateAvailable.set(showSameVersionDeployment);
+      this.forceUpdateRequired.set(false);
+      this.updateLevel.set(showSameVersionDeployment ? 'patch' : 'none');
+    } else {
+      this.updateAvailable.set(true);
+      this.forceUpdateRequired.set(level === 'minor' || level === 'major');
+      this.updateLevel.set(level);
+    }
+
+    this.currentReleaseInfo = releaseInfo;
+  }
+
+  private _shouldShowSameVersionDeployment(releaseInfo: string | null): boolean {
+    if (!this._notifyOnDeploymentWithSameVersion || !releaseInfo) {
+      return false;
+    }
+
+    if (this.currentReleaseInfo === null) {
+      return false;
+    }
+
+    return releaseInfo !== this.currentReleaseInfo;
+  }
+
+  private _normalizeManifest(manifest: VersionManifest): VersionManifest {
+    return {
+      version: typeof manifest.version === 'string' ? manifest.version.trim() : undefined,
+      release: typeof manifest.release === 'string' ? manifest.release.trim() : undefined
+    };
+  }
+
+  private _resolveLevel(manifest: VersionManifest): { level: UpdateLevel; manifest: VersionManifest } {
+    const level = this._detectUpdateLevel(this.currentVersion, manifest.version ?? '');
+    return { level, manifest };
+  }
+
+  private _checkForUpdates(): Observable<VersionManifest | null> {
+    return this._http
+      .get<VersionManifest>(`${this._manifestUrl}?t=${Date.now()}`, {
+        headers: { 'Cache-Control': 'no-store' }
+      })
+      .pipe(
+        map((manifest) => this._normalizeManifest(manifest)),
         catchError(() => of(null))
-    );
+      );
   }
 
   private _getReleaseMessage(): Observable<ReleaseMessage | null> {
-    return this._http.get(`${this._releaseMessageUrl}?t=${Date.now()}`, { headers: { 'Cache-Control': 'no-store' } }).pipe(
-      map((response) => {
-        if (typeof response !== 'object' || response === null) return null;
-        return this._sanitizeReleaseMessage(response);
-      }),
-      catchError(() => of(null))
-    );
+    return this._http
+      .get(`${this._releaseMessageUrl}?t=${Date.now()}`, {
+        headers: { 'Cache-Control': 'no-store' }
+      })
+      .pipe(
+        map((response) => {
+          if (typeof response !== 'object' || response === null) {
+            return null;
+          }
+
+          return this._sanitizeReleaseMessage(response);
+        }),
+        catchError(() => of(null))
+      );
   }
 
-  private _sanitizeReleaseMessage(value?: ReleaseMessage ): ReleaseMessage | null {
-    if (!value) return null;
+  private _sanitizeReleaseMessage(value?: ReleaseMessage): ReleaseMessage | null {
+    if (!value) {
+      return null;
+    }
 
     const safeTitle =
       typeof value.title === 'string' ? value.title.trim().slice(0, 500) : '';
     const safeMessage =
       typeof value.message === 'string' ? value.message.trim().slice(0, 1000) : '';
 
-    if (!safeTitle && !safeMessage) return null;
+    if (!safeTitle && !safeMessage) {
+      return null;
+    }
 
     return {
       ...(safeTitle ? { title: safeTitle } : {}),
@@ -194,12 +219,33 @@ export class UpdateCheckerService {
     const current = this._parseVersion(currentVersion);
     const remote = this._parseVersion(remoteVersion);
 
+    // Prerelease updates are intentionally treated as patch-level (non-blocking).
+    if (
+      remote.prerelease !== null ||
+      (current.prerelease !== null &&
+        current.major === remote.major &&
+        current.minor === remote.minor &&
+        current.patch === remote.patch)
+    ) {
+      return 'patch';
+    }
 
-    if (remote.major !== current.major) return 'major';
-    if (remote.minor !== current.minor) return 'minor';
-    if (remote.patch !== current.patch) return 'patch';
-    if (remote.prerelease !== current.prerelease) return 'prerelease';
-    
+    if (remote.major > current.major) {
+      return 'major';
+    }
+
+    if (remote.major === current.major && remote.minor > current.minor) {
+      return 'minor';
+    }
+
+    if (
+      remote.major === current.major &&
+      remote.minor === current.minor &&
+      remote.patch > current.patch
+    ) {
+      return 'patch';
+    }
+
     return 'none';
   }
 
@@ -210,14 +256,13 @@ export class UpdateCheckerService {
       .map((part) => Number.parseInt(part, 10))
       .map((part) => (Number.isNaN(part) ? 0 : part));
 
-    const prerelease = prereleasePart ? String(prereleasePart.split('.').slice(1)) : null;
+    const prerelease = prereleasePart ? prereleasePart : null;
 
     return {
-      major: normalized[0],
-      minor: normalized[1],
-      patch: normalized[2],
-      prerelease,
+      major: normalized[0] ?? 0,
+      minor: normalized[1] ?? 0,
+      patch: normalized[2] ?? 0,
+      prerelease
     };
   }
-
 }
