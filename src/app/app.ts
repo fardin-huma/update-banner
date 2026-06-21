@@ -7,6 +7,7 @@ import {
   signal
 } from '@angular/core';
 import packageJson from '../../package.json';
+import { environment } from '../environments/environment';
 import { UpdateBannerComponent } from './update-banner.component';
 import { UpdateCheckerService } from './update-checker.service';
 
@@ -20,7 +21,7 @@ import { UpdateCheckerService } from './update-checker.service';
 export class App implements OnInit, OnDestroy {
   private readonly updateChecker = inject(UpdateCheckerService);
 
-  protected readonly title = signal('Update Banner');
+  protected readonly title = signal(environment.name);
   protected readonly version = signal(packageJson.version);
   protected readonly currentYear = signal(new Date().getFullYear());
 
@@ -35,9 +36,11 @@ export class App implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.updateChecker.startChecking({
       currentVersion: this.version(),
-      manifestUrl: './version.json',
-      notifyOnReleaseChangeWithSameVersion: true,
-      intervalMs: 60000
+      manifestUrl: environment.manifestUrl,
+      releaseMessageUrl: environment.releaseMessageUrl,
+      notifyOnReleaseChangeWithSameVersion:
+        environment.notifyOnReleaseChangeWithSameVersion,
+      intervalMs: environment.intervalMs
     });
   }
 

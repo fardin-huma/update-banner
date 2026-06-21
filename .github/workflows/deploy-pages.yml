@@ -5,6 +5,15 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      environment:
+        description: Select deployment environment
+        required: true
+        default: production
+        type: choice
+        options:
+          - staging
+          - production
 
 permissions:
   contents: read
@@ -32,7 +41,9 @@ jobs:
         run: npm ci
 
       - name: Build app
-        run: npm run build -- --configuration production --base-href /update-banner/
+        env:
+          BUILD_CONFIGURATION: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'staging' }}
+        run: npm run build -- --configuration "$BUILD_CONFIGURATION" --base-href /update-banner/
 
       - name: Setup Pages
         uses: actions/configure-pages@v6
