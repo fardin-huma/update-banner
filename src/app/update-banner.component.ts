@@ -25,7 +25,7 @@ export class UpdateBannerComponent {
   private readonly snackBar = inject(MatSnackBar);
   private readonly dialog = inject(MatDialog);
 
-  private softShownForVersion: string | null = null;
+  private softShownForKey: string | null = null;
   private forceShownForVersion: string | null = null;
 
   readonly currentVersion = input.required<string>();
@@ -34,6 +34,7 @@ export class UpdateBannerComponent {
   protected readonly updateAvailable = this.updateChecker.updateAvailable;
   protected readonly forceUpdateRequired = this.updateChecker.forceUpdateRequired;
   protected readonly latestVersion = this.updateChecker.latestVersion;
+  protected readonly latestReleaseTag = this.updateChecker.latestReleaseTag;
   protected readonly releaseMessage = this.updateChecker.releaseMessage;
 
   constructor() {
@@ -41,10 +42,11 @@ export class UpdateBannerComponent {
       const updateAvailable = this.updateAvailable();
       const forceUpdate = this.forceUpdateRequired();
       const latest = this.latestVersion();
+      const latestReleaseTag = this.latestReleaseTag();
       const message = this.releaseMessage();
 
       if (!updateAvailable) {
-        this.softShownForVersion = null;
+        this.softShownForKey = null;
         this.forceShownForVersion = null;
         this.snackBar.dismiss();
         this.dialog.closeAll();
@@ -54,7 +56,7 @@ export class UpdateBannerComponent {
       if (forceUpdate) {
         this.showForceDialog(latest, message);
       } else {
-        this.showSoftToast(latest);
+        this.showSoftToast(latest, latestReleaseTag);
       }
     });
   }
@@ -64,12 +66,13 @@ export class UpdateBannerComponent {
     this.updateChecker.reloadForUpdate();
   }
 
-  private showSoftToast(latestVersion: string): void {
-    if (this.softShownForVersion === latestVersion) {
+  private showSoftToast(latestVersion: string, latestReleaseTag: string | null): void {
+    const softKey = `${latestVersion}|${latestReleaseTag ?? 'none'}`;
+    if (this.softShownForKey === softKey) {
       return;
     }
 
-    this.softShownForVersion = latestVersion;
+    this.softShownForKey = softKey;
     const text = `A new version (${latestVersion}) is available. Refresh to update.`;
     this.snackBar.openFromComponent(UpdateSnackbarComponent, {
       horizontalPosition: 'right',

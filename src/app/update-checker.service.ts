@@ -33,6 +33,7 @@ export class UpdateCheckerService {
   readonly forceUpdateRequired = signal(false);
   readonly updateLevel = signal<UpdateLevel>('none');
   readonly latestVersion = signal('0.0.0');
+  readonly latestReleaseTag = signal<string | null>(null);
   // Fetched from public/release-message/general.json and consumed by the blocking
   // update dialog (minor/major). Soft updates intentionally ignore this message.
   private readonly mutableReleaseMessage = signal<ReleaseMessage | null>(null);
@@ -57,6 +58,7 @@ export class UpdateCheckerService {
     this.forceUpdateRequired.set(false);
     this.updateLevel.set('none');
     this.latestVersion.set(this.currentVersion);
+    this.latestReleaseTag.set(null);
     this.mutableReleaseMessage.set(null);
     this.lastSeenReleaseTag = null;
 
@@ -98,12 +100,12 @@ export class UpdateCheckerService {
       const remoteReleaseTag = this.normalizeReleaseTag(payload.release);
 
       this.latestVersion.set(remoteVersion);
+      this.latestReleaseTag.set(remoteReleaseTag);
       const versionComparison = this.compareVersions(remoteVersion, this.currentVersion);
 
       const sameVersionReleaseChanged =
         this.notifyOnReleaseChangeWithSameVersion &&
         versionComparison === 0 &&
-        remoteReleaseTag !== null &&
         this.lastSeenReleaseTag !== remoteReleaseTag;
 
       if (versionComparison <= 0 && !sameVersionReleaseChanged) {
@@ -131,6 +133,7 @@ export class UpdateCheckerService {
       this.updateAvailable.set(false);
       this.forceUpdateRequired.set(false);
       this.updateLevel.set('none');
+      this.latestReleaseTag.set(null);
       this.mutableReleaseMessage.set(null);
     }
   }
