@@ -12,8 +12,13 @@ const version = packageJson.version ?? '0.0.0';
 const commitSha = firstNonEmpty(process.env.GITHUB_SHA) ?? null;
 const shortSha = commitSha ? commitSha.slice(0, 7) : null;
 const runNumber = firstNonEmpty(process.env.GITHUB_RUN_NUMBER) ?? null;
+const requestedConfiguration = firstNonEmpty(
+  process.env.APP_ENV,
+  process.env.NG_BUILD_CONFIGURATION,
+  process.env.npm_config_configuration
+);
 const environment =
-  firstNonEmpty(process.env.APP_ENV, process.env.NODE_ENV) ??
+  firstNonEmpty(requestedConfiguration, process.env.NODE_ENV) ??
   (process.env.GITHUB_ACTIONS ? 'production' : 'development');
 const release = shortSha && runNumber ? `${shortSha}-${runNumber}` : null;
 
