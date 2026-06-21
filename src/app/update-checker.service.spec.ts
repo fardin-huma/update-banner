@@ -15,7 +15,7 @@ describe('UpdateCheckerService', () => {
   let httpMock: HttpTestingController;
 
   const start = (options?: Partial<Parameters<UpdateCheckerService['startChecking']>[0]>): void => {
-    service.startChecking({
+    service.initialize({
       currentVersion: '1.0.0',
       manifestUrl,
       releaseMessageUrl,

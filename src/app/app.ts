@@ -34,13 +34,11 @@ export class App implements OnInit, OnDestroy {
   ];
 
   ngOnInit(): void {
-    this.updateChecker.startChecking({
+    this.updateChecker.initialize({
       currentVersion: this.version(),
-      manifestUrl: environment.manifestUrl,
-      releaseMessageUrl: environment.releaseMessageUrl,
-      notifyOnDeploymentWithSameVersion:
-        environment.notifyOnDeploymentWithSameVersion,
-      intervalMs: environment.intervalMs
+      environmentConfig: environment,
+      logAppInfo: true,
+      appName: packageJson.name
     });
   }
 

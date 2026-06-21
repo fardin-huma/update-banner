@@ -2,13 +2,18 @@ import { HttpClient } from '@angular/common/http';
 import { DestroyRef, inject, Injectable, signal } from '@angular/core';
 import { catchError, filter, map, Observable, of, Subscription, switchMap, timer } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { AppEnvironment } from '../environments/environment.model';
 
 export interface UpdateCheckOptions {
   currentVersion: string;
-  manifestUrl: string;
-  releaseMessageUrl: string;
+  environmentConfig?: AppEnvironment;
+  manifestUrl?: string;
+  releaseMessageUrl?: string;
   notifyOnDeploymentWithSameVersion?: boolean;
   intervalMs?: number;
+  logAppInfo?: boolean;
+  env?: string;
+  appName?: string;
 }
 
 interface ReleaseMessage {
@@ -63,14 +68,15 @@ export class UpdateCheckerService {
   private _pollSubscription?: Subscription;
 
   /**
-   * Starts periodic update checks.
+   * Initializes periodic update checks.
    *
    * Required URLs are provided by the app environment so the service stays
    * deployment-agnostic and does not rely on hardcoded endpoints.
    */
-  startChecking(options: UpdateCheckOptions): void {
+  initialize(options: UpdateCheckOptions): void {
     this.stopChecking();
 
+    const envConfig = options.environmentConfig;
     this.currentVersion = options.currentVersion;
     this.updateAvailable.set(false);
     this.forceUpdateRequired.set(false);
@@ -80,11 +86,19 @@ export class UpdateCheckerService {
     this.mutableReleaseMessage.set(null);
     this.currentReleaseInfo = null;
 
-    const intervalMs = options.intervalMs ?? 60000;
-    this._manifestUrl = options.manifestUrl;
-    this._releaseMessageUrl = options.releaseMessageUrl;
+    const intervalMs = options.intervalMs ?? envConfig?.intervalMs ?? 60000;
+    this._manifestUrl = options.manifestUrl ?? envConfig?.manifestUrl ?? '';
+    this._releaseMessageUrl = options.releaseMessageUrl ?? envConfig?.releaseMessageUrl ?? '';
     this._notifyOnDeploymentWithSameVersion =
-      options.notifyOnDeploymentWithSameVersion ?? false;
+      options.notifyOnDeploymentWithSameVersion ??
+      envConfig?.notifyOnDeploymentWithSameVersion ??
+      false;
+
+    if (!this._manifestUrl || !this._releaseMessageUrl) {
+      return;
+    }
+
+    this._logAppInfo(options);
 
     // Immediately check for updates and then start polling.
     this._pollSubscription = timer(0, intervalMs)
@@ -107,6 +121,11 @@ export class UpdateCheckerService {
       .subscribe((data) => this._applyResult(data));
   }
 
+  // Backward-compatible alias.
+  startChecking(options: UpdateCheckOptions): void {
+    this.initialize(options);
+  }
+
   /** Stops polling and invalidates in-flight async completion writes. */
   stopChecking(): void {
     this._pollSubscription?.unsubscribe();
@@ -117,6 +136,16 @@ export class UpdateCheckerService {
     const targetUrl = new URL(window.location.href);
     targetUrl.searchParams.set('_cb', Date.now().toString());
     window.location.replace(targetUrl.toString());
+  }
+
+  private _logAppInfo(options: UpdateCheckOptions): void {
+    if (!options.logAppInfo) {
+      return;
+    }
+
+    const env = options.env?.trim() || options.environmentConfig?.name?.trim() || 'unknown-env';
+    const appName = options.appName?.trim() || 'unknown-app';
+    console.info(`${env} | ${appName}/${this.currentVersion}`);
   }
 
   private _applyResult(data: PollResult): void {
