@@ -108,6 +108,7 @@ export class UpdateCheckerService {
       const sameVersionReleaseChanged =
         this.notifyOnReleaseChangeWithSameVersion &&
         versionComparison === 0 &&
+        this.lastSeenReleaseTag !== null &&
         this.lastSeenReleaseTag !== remoteReleaseTag;
 
       if (versionComparison <= 0 && !sameVersionReleaseChanged) {
@@ -199,7 +200,7 @@ export class UpdateCheckerService {
     };
   }
 
-  private normalizeReleaseTag(value: string | undefined): string | null {
+  private normalizeReleaseTag(value: unknown): string | null {
     if (typeof value !== 'string') {
       return null;
     }
