@@ -153,7 +153,7 @@ export class UpdateCheckerService {
 
 
   private _checkForUpdates() : Observable<VersionManifest | null> {    
-    return this._http.get<VersionManifest>(this._manifestUrl, { headers: { 'Cache-Control': 'no-store' } }).pipe(
+    return this._http.get<VersionManifest>(`${this._manifestUrl}?t=${Date.now()}`, { headers: { 'Cache-Control': 'no-store' } }).pipe(
         map((manifest) => {
             return {
         version: typeof manifest.version === 'string' ? manifest.version.trim() : undefined,
@@ -165,7 +165,7 @@ export class UpdateCheckerService {
   }
 
   private _getReleaseMessage(): Observable<ReleaseMessage | null> {
-    return this._http.get(this._releaseMessageUrl, { headers: { 'Cache-Control': 'no-store' } }).pipe(
+    return this._http.get(`${this._releaseMessageUrl}?t=${Date.now()}`, { headers: { 'Cache-Control': 'no-store' } }).pipe(
       map((response) => {
         if (typeof response !== 'object' || response === null) return null;
         return this._sanitizeReleaseMessage(response);
