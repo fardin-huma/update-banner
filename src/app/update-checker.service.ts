@@ -103,7 +103,6 @@ export class UpdateCheckerService {
       const sameVersionReleaseChanged =
         this.notifyOnReleaseChangeWithSameVersion &&
         versionComparison === 0 &&
-        this.lastSeenReleaseTag !== null &&
         remoteReleaseTag !== null &&
         this.lastSeenReleaseTag !== remoteReleaseTag;
 
